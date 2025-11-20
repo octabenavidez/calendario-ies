@@ -27,6 +27,7 @@ Aplicación React + TailwindCSS para visualizar eventos académicos (evaluacione
 - **Vite** - Build tool y dev server
 - **TailwindCSS** - Framework de estilos
 - **date-fns** - Manipulación de fechas
+- **lucide-react** - Iconos SVG optimizados
 
 ## 🛠️ Instalación
 

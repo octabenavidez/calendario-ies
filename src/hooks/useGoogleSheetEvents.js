@@ -18,21 +18,15 @@ export const useGoogleSheetEvents = () => {
       setLoading(true);
       setError(null);
       setUsingFallback(false);
-      console.log('🔄 Iniciando carga de eventos desde Google Sheet...');
       const fetchedEvents = await fetchEventsFromGoogleSheet();
-      console.log('✅ Eventos cargados exitosamente:', fetchedEvents.length);
-      console.log('📅 Eventos:', fetchedEvents);
       setEvents(fetchedEvents);
     } catch (err) {
-      console.error('❌ Error loading events from Google Sheet:', err);
-      console.warn('⚠️ Using fallback static events');
       // Fallback to static events
       setEvents(academicEvents);
       setUsingFallback(true);
       setError(`No se pudo cargar desde Google Sheet: ${err.message}. Usando datos de respaldo.`);
     } finally {
       setLoading(false);
-      console.log('✅ Carga completada');
     }
   };
 

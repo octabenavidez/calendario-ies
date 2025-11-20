@@ -89,10 +89,6 @@ const convertRowToEvent = (row) => {
     return "";
   };
 
-  // Debug: log available keys
-  if (Object.keys(row).length > 0 && !row.date && !row.fecha) {
-    console.log("Claves disponibles en la fila:", Object.keys(row));
-  }
 
   const date = getValue(row, ["date", "fecha", "fecha evento"]);
   const title = getValue(row, ["title", "titulo", "título", "nombre"]);
@@ -105,14 +101,8 @@ const convertRowToEvent = (row) => {
     "detalle",
   ]);
 
-  // Debug missing fields
+  // Validate required fields
   if (!date || !title || !type) {
-    console.warn("Fila inválida - campos faltantes:", {
-      date: date || "FALTANTE",
-      title: title || "FALTANTE",
-      type: type || "FALTANTE",
-      row: row,
-    });
     return null;
   }
 
@@ -141,7 +131,6 @@ const convertRowToEvent = (row) => {
         const day = String(dateObj.getDate()).padStart(2, "0");
         normalizedDate = `${year}-${month}-${day}`;
       } else {
-        console.warn("Could not parse date:", date);
         return null; // Invalid date
       }
     }
@@ -149,11 +138,9 @@ const convertRowToEvent = (row) => {
     // Validate the normalized date
     const dateObj = new Date(normalizedDate);
     if (isNaN(dateObj.getTime())) {
-      console.warn("Invalid normalized date:", normalizedDate);
       return null;
     }
   } catch (e) {
-    console.warn("Error parsing date:", date, e);
     return null;
   }
 
@@ -200,27 +187,16 @@ export const fetchEventsFromGoogleSheet = async () => {
           csvUrl.includes("?") ? "&" : "?"
         }_t=${timestamp}`;
 
-        console.log("Intentando cargar desde:", urlWithCacheBuster);
         const response = await fetch(urlWithCacheBuster, {
           cache: "no-store", // Prevent caching
           // No custom headers to avoid CORS issues
           // The timestamp in URL already prevents caching
         });
 
-        console.log(
-          "Respuesta recibida:",
-          response.status,
-          response.statusText
-        );
-        console.log("Content-Type:", response.headers.get("content-type"));
-
         if (response.ok) {
           // Try to get text with proper encoding
           const blob = await response.blob();
           csvText = await blob.text();
-
-          console.log("CSV recibido, longitud:", csvText.length);
-          console.log("Primeras líneas del CSV:", csvText.substring(0, 300));
 
           // Check if we got valid CSV (not HTML error page)
           if (
@@ -231,30 +207,11 @@ export const fetchEventsFromGoogleSheet = async () => {
             // Check if it looks like CSV (has commas and newlines)
             if (csvText.includes(",") && csvText.includes("\n")) {
               successfulUrl = csvUrl;
-              console.log("✅ CSV válido obtenido desde:", csvUrl);
               break; // Success!
-            } else {
-              console.warn(
-                "Respuesta no parece CSV válido (sin comas o saltos de línea)"
-              );
             }
-          } else {
-            console.warn(
-              "Respuesta no es CSV válido, contiene HTML:",
-              csvText.substring(0, 100)
-            );
           }
-        } else {
-          console.warn(
-            "Respuesta no OK:",
-            response.status,
-            response.statusText
-          );
-          const errorText = await response.text();
-          console.warn("Contenido de error:", errorText.substring(0, 200));
         }
       } catch (err) {
-        console.warn("Error al intentar URL:", csvUrl, err);
         lastError = err;
         continue; // Try next URL format
       }
@@ -267,30 +224,16 @@ export const fetchEventsFromGoogleSheet = async () => {
       );
     }
 
-    console.log("Parseando CSV...");
     const rows = parseCSV(csvText);
-    console.log("Filas parseadas:", rows.length);
-    console.log("Primera fila:", rows[0]);
-    console.log("Headers encontrados:", Object.keys(rows[0] || {}));
 
     if (rows.length === 0) {
       throw new Error("El Google Sheet está vacío o no tiene datos válidos.");
     }
 
     // Convert rows to events
-    console.log("Convirtiendo filas a eventos...");
     const events = rows
-      .map((row, index) => {
-        const event = convertRowToEvent(row);
-        if (!event) {
-          console.warn(`Fila ${index + 1} no pudo convertirse a evento:`, row);
-        }
-        return event;
-      })
+      .map((row) => convertRowToEvent(row))
       .filter((event) => event !== null); // Remove invalid events
-
-    console.log("Eventos convertidos:", events.length);
-    console.log("Primeros eventos:", events.slice(0, 3));
 
     if (events.length === 0) {
       throw new Error(
@@ -300,7 +243,6 @@ export const fetchEventsFromGoogleSheet = async () => {
 
     return events;
   } catch (error) {
-    console.error("Error fetching events from Google Sheet:", error);
     throw error;
   }
 };

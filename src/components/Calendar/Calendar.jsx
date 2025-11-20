@@ -12,6 +12,7 @@ import {
   isValid,
 } from "date-fns";
 import es from "date-fns/locale/es";
+import { Calendar as CalendarIcon, List } from "lucide-react";
 import { DayCell } from "./DayCell";
 import { FilterBar } from "./FilterBar";
 import { ListView } from "./ListView";
@@ -131,11 +132,6 @@ export const Calendar = () => {
     return uniqueSubjects.sort();
   }, [academicEvents]);
 
-  // Debug: log events
-  useEffect(() => {
-    console.log("📊 Eventos en Calendar:", academicEvents.length);
-    console.log("📅 Eventos:", academicEvents);
-  }, [academicEvents]);
 
   // Auto-navigate to first event date if no URL param and events are loaded
   useEffect(() => {
@@ -171,10 +167,6 @@ export const Calendar = () => {
             !hasEventsInCurrentMonth &&
             (currentYear !== eventYear || currentMonth !== eventMonth)
           ) {
-            console.log(
-              "📍 Navegando automáticamente al mes del primer evento:",
-              eventDates[0]
-            );
             setCurrentDate(firstEventDate);
           }
         }
@@ -326,7 +318,7 @@ export const Calendar = () => {
         setLinkCopied(false);
       }, 2000);
     } catch (err) {
-      console.error("Error al copiar el enlace:", err);
+      // Error al copiar enlace - silenciado en producción
     }
   };
 
@@ -493,7 +485,7 @@ export const Calendar = () => {
               <div className="flex items-center gap-1 bg-gray-700 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode("calendar")}
-                  className={`px-3 py-1.5 text-xs sm:text-sm rounded-md transition-all ${
+                  className={`px-3 py-1.5 text-xs sm:text-sm rounded-md transition-all flex items-center justify-center ${
                     viewMode === "calendar"
                       ? "bg-gray-600 text-white shadow-sm"
                       : "text-gray-400 hover:text-gray-200"
@@ -501,11 +493,11 @@ export const Calendar = () => {
                   title="Vista calendario"
                 >
                   <span className="hidden sm:inline">Calendario</span>
-                  <span className="sm:hidden">📅</span>
+                  <CalendarIcon className="w-4 h-4 sm:hidden" />
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`px-3 py-1.5 text-xs sm:text-sm rounded-md transition-all ${
+                  className={`px-3 py-1.5 text-xs sm:text-sm rounded-md transition-all flex items-center justify-center ${
                     viewMode === "list"
                       ? "bg-gray-600 text-white shadow-sm"
                       : "text-gray-400 hover:text-gray-200"
@@ -513,7 +505,7 @@ export const Calendar = () => {
                   title="Vista lista"
                 >
                   <span className="hidden sm:inline">Lista</span>
-                  <span className="sm:hidden">📋</span>
+                  <List className="w-4 h-4 sm:hidden" />
                 </button>
               </div>
             </div>
