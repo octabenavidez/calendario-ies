@@ -17,10 +17,10 @@ export const FilterBar = ({
   onClearFilters,
 }) => {
   const eventTypes = [
-    { value: "", label: "Todos", bgClass: "bg-gray-600" },
-    { value: "evaluación", label: "Evaluación", bgClass: "bg-red-500" },
-    { value: "tp", label: "TP", bgClass: "bg-blue-500" },
-    { value: "tarea", label: "Tarea", bgClass: "bg-green-500" },
+    { value: "", label: "Todos", bgClass: "bg-gray-600", dotColor: "bg-gray-400" },
+    { value: "evaluación", label: "Evaluación", bgClass: "bg-red-500", dotColor: "bg-red-500" },
+    { value: "tp", label: "TP", bgClass: "bg-blue-500", dotColor: "bg-blue-500" },
+    { value: "tarea", label: "Tarea", bgClass: "bg-green-500", dotColor: "bg-green-500" },
   ];
 
   const hasActiveFilters = selectedType || selectedSubject;
@@ -41,6 +41,7 @@ export const FilterBar = ({
                 onClick={() => onTypeChange(type.value)}
                 className={`
                   px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all
+                  flex items-center gap-2
                   ${
                     selectedType === type.value
                       ? `${type.bgClass} text-white shadow-md`
@@ -48,6 +49,9 @@ export const FilterBar = ({
                   }
                 `}
               >
+                {type.value && (
+                  <div className={`w-2 h-2 rounded-full ${type.dotColor} flex-shrink-0`}></div>
+                )}
                 {type.label}
               </button>
             ))}

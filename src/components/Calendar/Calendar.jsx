@@ -1,46 +1,52 @@
-import { useState, useMemo, useEffect } from 'react';
-import { 
-  startOfMonth, 
-  endOfMonth, 
-  startOfWeek, 
-  endOfWeek, 
+import { useState, useMemo, useEffect } from "react";
+import {
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
   eachDayOfInterval,
   format,
   parse,
   isSameMonth,
   isToday,
-  isValid
-} from 'date-fns';
-import es from 'date-fns/locale/es';
-import { DayCell } from './DayCell';
-import { FilterBar } from './FilterBar';
-import { useGoogleSheetEvents } from '@/hooks/useGoogleSheetEvents';
+  isValid,
+} from "date-fns";
+import es from "date-fns/locale/es";
+import { DayCell } from "./DayCell";
+import { FilterBar } from "./FilterBar";
+import { ListView } from "./ListView";
+import { useGoogleSheetEvents } from "@/hooks/useGoogleSheetEvents";
 
 /**
  * Main academic calendar component
  */
 export const Calendar = () => {
   // Fetch events from Google Sheet (with fallback to static events)
-  const { events: academicEvents, loading, error, usingFallback } = useGoogleSheetEvents();
+  const {
+    events: academicEvents,
+    loading,
+    error,
+    usingFallback,
+  } = useGoogleSheetEvents();
 
   // Initialize state from URL parameters
   const getInitialStateFromURL = () => {
     const params = new URLSearchParams(window.location.search);
-    
+
     // Get month from URL (format: YYYY-MM)
-    const monthParam = params.get('month');
+    const monthParam = params.get("month");
     let initialDate = new Date();
     if (monthParam) {
-      const parsedDate = parse(monthParam + '-01', 'yyyy-MM-dd', new Date());
+      const parsedDate = parse(monthParam + "-01", "yyyy-MM-dd", new Date());
       if (isValid(parsedDate)) {
         initialDate = parsedDate;
       }
     }
-    
+
     // Get filters from URL
-    const typeParam = params.get('type') || '';
-    const subjectParam = params.get('subject') || '';
-    
+    const typeParam = params.get("type") || "";
+    const subjectParam = params.get("subject") || "";
+
     return {
       date: initialDate,
       type: typeParam,
@@ -53,11 +59,62 @@ export const Calendar = () => {
   const [selectedType, setSelectedType] = useState(initialState.type);
   const [selectedSubject, setSelectedSubject] = useState(initialState.subject);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [viewMode, setViewMode] = useState("calendar"); // "calendar" or "list"
+
+  // Swipe detection for mobile
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const [touchStartY, setTouchStartY] = useState(null);
+  const [touchEndY, setTouchEndY] = useState(null);
+
+  // Minimum swipe distance (in pixels)
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchEndY(null);
+    setTouchStart(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
+  };
+
+  const onTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd || !touchStartY || !touchEndY) return;
+
+    const distanceX = touchStart - touchEnd;
+    const distanceY = Math.abs(touchStartY - touchEndY);
+
+    // Only trigger swipe if horizontal movement is greater than vertical (to avoid conflicts with scroll)
+    if (
+      Math.abs(distanceX) > distanceY &&
+      Math.abs(distanceX) > minSwipeDistance
+    ) {
+      const isLeftSwipe = distanceX > minSwipeDistance;
+      const isRightSwipe = distanceX < -minSwipeDistance;
+
+      if (isLeftSwipe) {
+        goToNextMonth();
+      }
+      if (isRightSwipe) {
+        goToPreviousMonth();
+      }
+    }
+
+    // Reset touch states
+    setTouchStart(null);
+    setTouchEnd(null);
+    setTouchStartY(null);
+    setTouchEndY(null);
+  };
 
   // Get first and last day of the month
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  
+
   // Get start and end of the week containing the first day of the month
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 }); // Monday
   const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
@@ -76,37 +133,48 @@ export const Calendar = () => {
 
   // Debug: log events
   useEffect(() => {
-    console.log('📊 Eventos en Calendar:', academicEvents.length);
-    console.log('📅 Eventos:', academicEvents);
+    console.log("📊 Eventos en Calendar:", academicEvents.length);
+    console.log("📅 Eventos:", academicEvents);
   }, [academicEvents]);
 
   // Auto-navigate to first event date if no URL param and events are loaded
   useEffect(() => {
-    if (academicEvents.length > 0 && !window.location.search.includes('month=')) {
+    if (
+      academicEvents.length > 0 &&
+      !window.location.search.includes("month=")
+    ) {
       // Find the earliest event date
       const eventDates = academicEvents
-        .map(e => e.date)
-        .filter(d => d)
+        .map((e) => e.date)
+        .filter((d) => d)
         .sort();
-      
+
       if (eventDates.length > 0) {
-        const firstEventDate = parse(eventDates[0], 'yyyy-MM-dd', new Date());
+        const firstEventDate = parse(eventDates[0], "yyyy-MM-dd", new Date());
         if (isValid(firstEventDate)) {
           const currentYear = currentDate.getFullYear();
           const currentMonth = currentDate.getMonth();
           const eventYear = firstEventDate.getFullYear();
           const eventMonth = firstEventDate.getMonth();
-          
+
           // Only change if we're not already showing a month with events
-          const hasEventsInCurrentMonth = academicEvents.some(e => {
-            const eventDate = parse(e.date, 'yyyy-MM-dd', new Date());
-            return isValid(eventDate) && 
-                   eventDate.getFullYear() === currentYear && 
-                   eventDate.getMonth() === currentMonth;
+          const hasEventsInCurrentMonth = academicEvents.some((e) => {
+            const eventDate = parse(e.date, "yyyy-MM-dd", new Date());
+            return (
+              isValid(eventDate) &&
+              eventDate.getFullYear() === currentYear &&
+              eventDate.getMonth() === currentMonth
+            );
           });
-          
-          if (!hasEventsInCurrentMonth && (currentYear !== eventYear || currentMonth !== eventMonth)) {
-            console.log('📍 Navegando automáticamente al mes del primer evento:', eventDates[0]);
+
+          if (
+            !hasEventsInCurrentMonth &&
+            (currentYear !== eventYear || currentMonth !== eventMonth)
+          ) {
+            console.log(
+              "📍 Navegando automáticamente al mes del primer evento:",
+              eventDates[0]
+            );
             setCurrentDate(firstEventDate);
           }
         }
@@ -116,7 +184,7 @@ export const Calendar = () => {
 
   // Normalize event type (remove accents, lowercase) for comparison
   const normalizeType = (type) => {
-    if (!type) return '';
+    if (!type) return "";
     return type
       .toLowerCase()
       .normalize("NFD")
@@ -129,8 +197,10 @@ export const Calendar = () => {
     const normalizedSelectedType = normalizeType(selectedType);
     return academicEvents.filter((event) => {
       const normalizedEventType = normalizeType(event.type);
-      const matchesType = !selectedType || normalizedEventType === normalizedSelectedType;
-      const matchesSubject = !selectedSubject || event.subject === selectedSubject;
+      const matchesType =
+        !selectedType || normalizedEventType === normalizedSelectedType;
+      const matchesSubject =
+        !selectedSubject || event.subject === selectedSubject;
       return matchesType && matchesSubject;
     });
   }, [academicEvents, selectedType, selectedSubject]);
@@ -150,29 +220,31 @@ export const Calendar = () => {
 
   // Get events for a specific day
   const getEventsForDay = (date) => {
-    const dateKey = format(date, 'yyyy-MM-dd');
+    const dateKey = format(date, "yyyy-MM-dd");
     return eventsByDate[dateKey] || [];
   };
 
   // Update URL with current state
   const updateURL = (date, type, subject) => {
     const params = new URLSearchParams();
-    
+
     // Add month (format: YYYY-MM)
-    const monthStr = format(date, 'yyyy-MM');
-    params.set('month', monthStr);
-    
+    const monthStr = format(date, "yyyy-MM");
+    params.set("month", monthStr);
+
     // Add filters only if they have values
     if (type) {
-      params.set('type', type);
+      params.set("type", type);
     }
     if (subject) {
-      params.set('subject', subject);
+      params.set("subject", subject);
     }
-    
+
     // Update URL without reloading the page
-    const newURL = `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}`;
-    window.history.pushState({}, '', newURL);
+    const newURL = `${window.location.pathname}${
+      params.toString() ? "?" + params.toString() : ""
+    }`;
+    window.history.pushState({}, "", newURL);
   };
 
   // Sync state with URL whenever it changes (skip initial mount if URL already has params)
@@ -182,16 +254,20 @@ export const Calendar = () => {
     if (hasURLParams) {
       // Check if current state matches URL params (to avoid unnecessary updates)
       const params = new URLSearchParams(window.location.search);
-      const urlMonth = params.get('month');
-      const urlType = params.get('type') || '';
-      const urlSubject = params.get('subject') || '';
-      
-      const currentMonth = format(currentDate, 'yyyy-MM');
-      if (urlMonth === currentMonth && urlType === selectedType && urlSubject === selectedSubject) {
+      const urlMonth = params.get("month");
+      const urlType = params.get("type") || "";
+      const urlSubject = params.get("subject") || "";
+
+      const currentMonth = format(currentDate, "yyyy-MM");
+      if (
+        urlMonth === currentMonth &&
+        urlType === selectedType &&
+        urlSubject === selectedSubject
+      ) {
         return; // State matches URL, no need to update
       }
     }
-    
+
     updateURL(currentDate, selectedType, selectedSubject);
   }, [currentDate, selectedType, selectedSubject]);
 
@@ -204,8 +280,8 @@ export const Calendar = () => {
       setSelectedSubject(newState.subject);
     };
 
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   // Navigate to previous month
@@ -236,8 +312,8 @@ export const Calendar = () => {
   };
 
   const handleClearFilters = () => {
-    setSelectedType('');
-    setSelectedSubject('');
+    setSelectedType("");
+    setSelectedSubject("");
   };
 
   // Copy current URL to clipboard
@@ -250,12 +326,12 @@ export const Calendar = () => {
         setLinkCopied(false);
       }, 2000);
     } catch (err) {
-      console.error('Error al copiar el enlace:', err);
+      console.error("Error al copiar el enlace:", err);
     }
   };
 
   // Week day names
-  const weekDays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const weekDays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
   // Loading state
   if (loading) {
@@ -290,7 +366,9 @@ export const Calendar = () => {
                 d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <h2 className="text-xl font-bold text-gray-100">Error al cargar eventos</h2>
+            <h2 className="text-xl font-bold text-gray-100">
+              Error al cargar eventos
+            </h2>
             <p className="text-gray-400 text-center">{error}</p>
             <button
               onClick={() => window.location.reload()}
@@ -305,7 +383,12 @@ export const Calendar = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-3 sm:p-6 bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen">
+    <div
+      className="max-w-6xl mx-auto p-3 sm:p-6 bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
       <div className="bg-gray-800 rounded-xl shadow-xl p-4 sm:p-6 border border-gray-700">
         {/* Warning banner if using fallback */}
         {usingFallback && (
@@ -330,96 +413,135 @@ export const Calendar = () => {
         )}
         {/* Calendar header */}
         <div className="flex items-center justify-between mb-4 sm:mb-6">
-          <button
-            onClick={goToPreviousMonth}
-            className="p-2 rounded-lg hover:bg-gray-700 active:bg-gray-600 transition-colors flex-shrink-0"
-            aria-label="Mes anterior"
-          >
-            <svg
-              className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {viewMode === "calendar" ? (
+            <button
+              onClick={goToPreviousMonth}
+              className="p-2 rounded-lg hover:bg-gray-700 active:bg-gray-600 transition-colors flex-shrink-0"
+              aria-label="Mes anterior"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
+              <svg
+                className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </button>
+          ) : (
+            <div className="w-10"></div>
+          )}
 
           <div className="flex-1 flex flex-col items-center gap-2 px-2">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-100 text-center">
-              {format(currentDate, "MMMM 'de' yyyy", { locale: es })}
+              {viewMode === "calendar"
+                ? format(currentDate, "MMMM 'de' yyyy", { locale: es })
+                : "Próximos Eventos"}
             </h1>
-            <button
-              onClick={handleCopyLink}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-colors ${
-                linkCopied
-                  ? 'text-green-400 bg-green-900/30'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600'
-              }`}
-              title="Copiar enlace con filtros y mes actual"
-            >
-              {linkCopied ? (
-                <>
-                  <svg
-                    className="w-4 h-4 sm:w-5 sm:h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  <span className="hidden sm:inline">¡Copiado!</span>
-                </>
-              ) : (
-                <>
-                  <svg
-                    className="w-4 h-4 sm:w-5 sm:h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                    />
-                  </svg>
-                  <span className="hidden sm:inline">Copiar enlace</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyLink}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-colors ${
+                  linkCopied
+                    ? "text-green-400 bg-green-900/30"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600"
+                }`}
+                title="Copiar enlace con filtros y mes actual"
+              >
+                {linkCopied ? (
+                  <>
+                    <svg
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    <span className="hidden sm:inline">¡Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <span className="hidden sm:inline">Copiar enlace</span>
+                  </>
+                )}
+              </button>
+              {/* View mode toggle */}
+              <div className="flex items-center gap-1 bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode("calendar")}
+                  className={`px-3 py-1.5 text-xs sm:text-sm rounded-md transition-all ${
+                    viewMode === "calendar"
+                      ? "bg-gray-600 text-white shadow-sm"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                  title="Vista calendario"
+                >
+                  <span className="hidden sm:inline">Calendario</span>
+                  <span className="sm:hidden">📅</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`px-3 py-1.5 text-xs sm:text-sm rounded-md transition-all ${
+                    viewMode === "list"
+                      ? "bg-gray-600 text-white shadow-sm"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                  title="Vista lista"
+                >
+                  <span className="hidden sm:inline">Lista</span>
+                  <span className="sm:hidden">📋</span>
+                </button>
+              </div>
+            </div>
           </div>
 
-          <button
-            onClick={goToNextMonth}
-            className="p-2 rounded-lg hover:bg-gray-700 active:bg-gray-600 transition-colors flex-shrink-0"
-            aria-label="Mes siguiente"
-          >
-            <svg
-              className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {viewMode === "calendar" ? (
+            <button
+              onClick={goToNextMonth}
+              className="p-2 rounded-lg hover:bg-gray-700 active:bg-gray-600 transition-colors flex-shrink-0"
+              aria-label="Mes siguiente"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </button>
+              <svg
+                className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          ) : (
+            <div className="w-10"></div>
+          )}
         </div>
 
         {/* Filters */}
@@ -435,46 +557,57 @@ export const Calendar = () => {
         </div>
 
         {/* Event type legend */}
-        <div className="flex items-center justify-center gap-3 sm:gap-6 mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-gray-700">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-red-500"></div>
-            <span className="text-xs sm:text-sm text-gray-300">Evaluación</span>
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-blue-500"></div>
-            <span className="text-xs sm:text-sm text-gray-300">TP</span>
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-green-500"></div>
-            <span className="text-xs sm:text-sm text-gray-300">Tarea</span>
-          </div>
-        </div>
-
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-1 sm:gap-2">
-          {/* Day headers */}
-          {weekDays.map((day) => (
-            <div
-              key={day}
-              className="text-center font-semibold text-gray-400 py-1 sm:py-2 text-xs sm:text-sm"
-            >
-              {day}
+        {viewMode === "calendar" && (
+          <div className="flex items-center justify-center gap-3 sm:gap-6 mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-gray-700">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-red-500"></div>
+              <span className="text-xs sm:text-sm text-gray-300">Evaluación</span>
             </div>
-          ))}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-blue-500"></div>
+              <span className="text-xs sm:text-sm text-gray-300">TP</span>
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-green-500"></div>
+              <span className="text-xs sm:text-sm text-gray-300">Tarea</span>
+            </div>
+          </div>
+        )}
 
-          {/* Day cells */}
-          {calendarDays.map((day, index) => (
-            <DayCell
-              key={index}
-              date={day}
-              isCurrentMonth={isSameMonth(day, currentDate)}
-              isToday={isToday(day)}
-              events={getEventsForDay(day)}
-            />
-          ))}
-        </div>
+        {/* Calendar or List view */}
+        {viewMode === "calendar" ? (
+          /* Calendar grid */
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
+            {/* Day headers */}
+            {weekDays.map((day) => (
+              <div
+                key={day}
+                className="text-center font-semibold text-gray-400 py-1 sm:py-2 text-xs sm:text-sm"
+              >
+                {day}
+              </div>
+            ))}
+
+            {/* Day cells */}
+            {calendarDays.map((day, index) => (
+              <DayCell
+                key={index}
+                date={day}
+                isCurrentMonth={isSameMonth(day, currentDate)}
+                isToday={isToday(day)}
+                events={getEventsForDay(day)}
+              />
+            ))}
+          </div>
+        ) : (
+          /* List view */
+          <ListView
+            events={filteredEvents}
+            selectedType={selectedType}
+            selectedSubject={selectedSubject}
+          />
+        )}
       </div>
     </div>
   );
 };
-
